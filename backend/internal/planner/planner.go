@@ -33,11 +33,18 @@ const (
 	CachePolicyStale CachePolicy = "STALE"
 )
 
-type Dependency struct {
+type Node struct {
 	Name        string      `json:"name"`
 	Health      Health      `json:"health"`
 	Criticality Criticality `json:"criticality"`
 	CachePolicy CachePolicy `json:"cachePolicy"`
+}
+
+type Dependency = Node
+
+type Edge struct {
+	From string `json:"from"`
+	To   string `json:"to"`
 }
 
 type DependencyDecision struct {
@@ -47,7 +54,10 @@ type DependencyDecision struct {
 }
 
 type PlanRequest struct {
-	Dependencies []Dependency `json:"dependencies"`
+	Root         string       `json:"root"`
+	Nodes        []Node       `json:"nodes"`
+	Edges        []Edge       `json:"edges"`
+	Dependencies []Dependency `json:"dependencies,omitempty"`
 }
 
 type PlanResponse struct {
@@ -55,16 +65,60 @@ type PlanResponse struct {
 }
 
 func Plan(request PlanRequest) PlanResponse {
-	decisions := make([]DependencyDecision, 0, len(request.Dependencies))
+	nodes := request.Nodes
+	if len(nodes) == 0 {
+		nodes = request.Dependencies
+	}
 
-	for _, dep := range request.Dependencies {
-		decisions = append(decisions, decide(dep))
+	byName := make(map[string]Node, len(nodes))
+	byDecision := make(map[string]DependencyDecision, len(nodes))
+
+	for _, node := range nodes {
+		byName[node.Name] = node
+		byDecision[node.Name] = decide(node)
+	}
+
+	for i := 0; i < len(nodes); i++ {
+		changed := false
+
+		for _, edge := range request.Edges {
+			child, ok := byName[edge.To]
+			if !ok || child.Criticality != CriticalityRequired {
+				continue
+			}
+
+			childDecision, ok := byDecision[edge.To]
+			if !ok || childDecision.Decision != DecisionFail {
+				continue
+			}
+
+			parentDecision, ok := byDecision[edge.From]
+			if !ok || parentDecision.Decision == DecisionFail {
+				continue
+			}
+
+			byDecision[edge.From] = DependencyDecision{
+				Name:     edge.From,
+				Decision: DecisionFail,
+				Reason:   "required dependency " + edge.To + " failed",
+			}
+			changed = true
+		}
+
+		if !changed {
+			break
+		}
+	}
+
+	decisions := make([]DependencyDecision, 0, len(nodes))
+	for _, node := range nodes {
+		decisions = append(decisions, byDecision[node.Name])
 	}
 
 	return PlanResponse{Decisions: decisions}
 }
 
-func decide(dep Dependency) DependencyDecision {
+func decide(dep Node) DependencyDecision {
 	decision := DecisionFail
 	reason := "dependency health is unknown"
 
