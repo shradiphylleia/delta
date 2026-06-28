@@ -2,4 +2,9 @@ learning.md
 .gocache/
 backend/bin/
 backend/*.exe
+.pnpm-store/
+frontend/node_modules/
+frontend/dist/
+frontend/*.log
+frontend/*.tsbuildinfo
 .gocache
