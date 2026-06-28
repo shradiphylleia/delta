@@ -136,6 +136,51 @@ func TestOptionalChildDoesNotFailParent(t *testing.T) {
 	}
 }
 
+func TestValidateNeedsAtLeastOneNode(t *testing.T) {
+	errors := Validate(PlanRequest{})
+
+	if len(errors) == 0 {
+		t.Fatal("expected validation error")
+	}
+}
+
+func TestValidateCatchesBadNodeValues(t *testing.T) {
+	errors := Validate(PlanRequest{
+		Nodes: []Node{
+			{
+				Name:        "Pricing",
+				Health:      "BROKEN",
+				Criticality: "IMPORTANT",
+				CachePolicy: "MAYBE",
+			},
+		},
+	})
+
+	if len(errors) != 3 {
+		t.Fatalf("expected 3 errors, got %d", len(errors))
+	}
+}
+
+func TestValidateCatchesMissingEdgeNodes(t *testing.T) {
+	errors := Validate(PlanRequest{
+		Nodes: []Node{
+			{
+				Name:        "Product API",
+				Health:      HealthUp,
+				Criticality: CriticalityRequired,
+				CachePolicy: CachePolicyNone,
+			},
+		},
+		Edges: []Edge{
+			{From: "Product API", To: "Pricing"},
+		},
+	})
+
+	if len(errors) != 1 {
+		t.Fatalf("expected 1 error, got %d", len(errors))
+	}
+}
+
 func findDecision(t *testing.T, res PlanResponse, name string) DependencyDecision {
 	t.Helper()
 

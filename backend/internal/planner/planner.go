@@ -64,6 +64,59 @@ type PlanResponse struct {
 	Decisions []DependencyDecision `json:"decisions"`
 }
 
+func Validate(request PlanRequest) []string {
+	nodes := request.Nodes
+	if len(nodes) == 0 {
+		nodes = request.Dependencies
+	}
+
+	var errors []string
+	if len(nodes) == 0 {
+		errors = append(errors, "at least one node is required")
+	}
+
+	seen := map[string]bool{}
+	for _, node := range nodes {
+		if node.Name == "" {
+			errors = append(errors, "node name is required")
+			continue
+		}
+
+		if seen[node.Name] {
+			errors = append(errors, "duplicate node "+node.Name)
+		}
+		seen[node.Name] = true
+
+		if !validHealth(node.Health) {
+			errors = append(errors, "node "+node.Name+" has invalid health")
+		}
+
+		if !validCriticality(node.Criticality) {
+			errors = append(errors, "node "+node.Name+" has invalid criticality")
+		}
+
+		if !validCachePolicy(node.CachePolicy) {
+			errors = append(errors, "node "+node.Name+" has invalid cache policy")
+		}
+	}
+
+	if request.Root != "" && !seen[request.Root] {
+		errors = append(errors, "root node "+request.Root+" does not exist")
+	}
+
+	for _, edge := range request.Edges {
+		if !seen[edge.From] {
+			errors = append(errors, "edge from "+edge.From+" does not exist")
+		}
+
+		if !seen[edge.To] {
+			errors = append(errors, "edge to "+edge.To+" does not exist")
+		}
+	}
+
+	return errors
+}
+
 func Plan(request PlanRequest) PlanResponse {
 	nodes := request.Nodes
 	if len(nodes) == 0 {
@@ -157,4 +210,16 @@ func decide(dep Node) DependencyDecision {
 		Decision: decision,
 		Reason:   reason,
 	}
+}
+
+func validHealth(value Health) bool {
+	return value == HealthUp || value == HealthDegraded || value == HealthDown
+}
+
+func validCriticality(value Criticality) bool {
+	return value == CriticalityRequired || value == CriticalityOptional
+}
+
+func validCachePolicy(value CachePolicy) bool {
+	return value == CachePolicyNone || value == CachePolicyFresh || value == CachePolicyStale
 }

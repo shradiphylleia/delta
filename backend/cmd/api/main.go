@@ -30,6 +30,11 @@ func handlePlan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if errors := planner.Validate(req); len(errors) > 0 {
+		writeJSON(w, http.StatusBadRequest, map[string][]string{"errors": errors})
+		return
+	}
+
 	res := planner.Plan(req)
 	writeJSON(w, http.StatusOK, res)
 }
