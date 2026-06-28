@@ -100,6 +100,10 @@ func TestRequiredChildFailureFailsParent(t *testing.T) {
 	if got.Decision != DecisionFail {
 		t.Fatalf("expected %s, got %s", DecisionFail, got.Decision)
 	}
+
+	if res.Status != DecisionFail {
+		t.Fatalf("expected response status %s, got %s", DecisionFail, res.Status)
+	}
 }
 
 func TestOptionalChildDoesNotFailParent(t *testing.T) {
@@ -133,6 +137,27 @@ func TestOptionalChildDoesNotFailParent(t *testing.T) {
 
 	if child.Decision != DecisionOmit {
 		t.Fatalf("expected child %s, got %s", DecisionOmit, child.Decision)
+	}
+}
+
+func TestPlanUsesFirstNodeAsRootWhenRootIsMissing(t *testing.T) {
+	res := Plan(PlanRequest{
+		Nodes: []Node{
+			{
+				Name:        "Dashboard API",
+				Health:      HealthUp,
+				Criticality: CriticalityRequired,
+				CachePolicy: CachePolicyNone,
+			},
+		},
+	})
+
+	if res.Root != "Dashboard API" {
+		t.Fatalf("expected Dashboard API, got %s", res.Root)
+	}
+
+	if res.Status != DecisionLive {
+		t.Fatalf("expected %s, got %s", DecisionLive, res.Status)
 	}
 }
 

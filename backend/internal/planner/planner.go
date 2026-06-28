@@ -61,6 +61,9 @@ type PlanRequest struct {
 }
 
 type PlanResponse struct {
+	Root      string               `json:"root"`
+	Status    Decision             `json:"status"`
+	Reason    string               `json:"reason"`
 	Decisions []DependencyDecision `json:"decisions"`
 }
 
@@ -168,7 +171,18 @@ func Plan(request PlanRequest) PlanResponse {
 		decisions = append(decisions, byDecision[node.Name])
 	}
 
-	return PlanResponse{Decisions: decisions}
+	root := request.Root
+	if root == "" && len(nodes) > 0 {
+		root = nodes[0].Name
+	}
+
+	rootDecision := byDecision[root]
+	return PlanResponse{
+		Root:      root,
+		Status:    rootDecision.Decision,
+		Reason:    rootDecision.Reason,
+		Decisions: decisions,
+	}
 }
 
 func decide(dep Node) DependencyDecision {
