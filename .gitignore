@@ -1,0 +1,5 @@
+learning.md
+.gocache/
+backend/bin/
+backend/*.exe
+.gocache
