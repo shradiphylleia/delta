@@ -1,0 +1,54 @@
+{
+  "root": "Product API",
+  "nodes": [
+    {
+      "name": "Product API",
+      "health": "UP",
+      "criticality": "REQUIRED",
+      "cachePolicy": "NONE"
+    },
+    {
+      "name": "Pricing",
+      "health": "UP",
+      "criticality": "REQUIRED",
+      "cachePolicy": "NONE"
+    },
+    {
+      "name": "Inventory",
+      "health": "DEGRADED",
+      "criticality": "REQUIRED",
+      "cachePolicy": "FRESH"
+    },
+    {
+      "name": "Reviews",
+      "health": "DOWN",
+      "criticality": "OPTIONAL",
+      "cachePolicy": "STALE"
+    },
+    {
+      "name": "Recommendations",
+      "health": "DOWN",
+      "criticality": "OPTIONAL",
+      "cachePolicy": "NONE"
+    }
+  ],
+  "edges": [
+    {
+      "from": "Product API",
+      "to": "Pricing"
+    },
+    {
+      "from": "Product API",
+      "to": "Inventory"
+    },
+    {
+      "from": "Product API",
+      "to": "Reviews"
+    },
+    {
+      "from": "Product API",
+      "to": "Recommendations"
+    }
+  ]
+}
+
