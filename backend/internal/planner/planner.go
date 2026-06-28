@@ -69,11 +69,12 @@ type PlanRequest struct {
 }
 
 type PlanResponse struct {
-	Root      string               `json:"root"`
-	Status    Decision             `json:"status"`
-	Outcome   Outcome              `json:"outcome"`
-	Reason    string               `json:"reason"`
-	Decisions []DependencyDecision `json:"decisions"`
+	Root           string               `json:"root"`
+	Status         Decision             `json:"status"`
+	Outcome        Outcome              `json:"outcome"`
+	Reason         string               `json:"reason"`
+	DecisionCounts map[Decision]int     `json:"decisionCounts"`
+	Decisions      []DependencyDecision `json:"decisions"`
 }
 
 func Validate(request PlanRequest) []string {
@@ -187,12 +188,29 @@ func Plan(request PlanRequest) PlanResponse {
 
 	rootDecision := byDecision[root]
 	return PlanResponse{
-		Root:      root,
-		Status:    rootDecision.Decision,
-		Outcome:   outcome(rootDecision, decisions),
-		Reason:    rootDecision.Reason,
-		Decisions: decisions,
+		Root:           root,
+		Status:         rootDecision.Decision,
+		Outcome:        outcome(rootDecision, decisions),
+		Reason:         rootDecision.Reason,
+		DecisionCounts: countDecisions(decisions),
+		Decisions:      decisions,
 	}
+}
+
+func countDecisions(decisions []DependencyDecision) map[Decision]int {
+	counts:=map[Decision]int{
+		DecisionLive:  0,
+		DecisionCache: 0,
+		DecisionStale: 0,
+		DecisionOmit:  0,
+		DecisionFail:  0,
+	}
+
+	for _,item:=range decisions{
+		counts[item.Decision]++
+	}
+
+	return counts
 }
 
 func outcome(root DependencyDecision, decisions []DependencyDecision) Outcome {
@@ -200,8 +218,8 @@ func outcome(root DependencyDecision, decisions []DependencyDecision) Outcome {
 		return OutcomeFailed
 	}
 
-	for _,item:=range decisions {
-		if item.Decision==DecisionCache||item.Decision==DecisionStale||item.Decision==DecisionOmit {
+	for _,item:= range decisions {
+		if item.Decision==DecisionCache||item.Decision==DecisionStale||item.Decision==DecisionOmit{
 			return OutcomeDegraded
 		}
 	}

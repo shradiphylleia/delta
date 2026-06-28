@@ -33,7 +33,15 @@ Expected summary:
 {
   "root": "Product API",
   "status": "FAIL",
-  "reason": "required dependency Pricing failed"
+  "outcome": "FAILED",
+  "reason": "required dependency Pricing failed",
+  "decisionCounts": {
+    "LIVE": 0,
+    "CACHE": 1,
+    "STALE": 1,
+    "OMIT": 1,
+    "FAIL": 2
+  }
 }
 ```
 
@@ -47,7 +55,14 @@ Expected summary:
 {
   "root": "Product API",
   "status": "LIVE",
-  "reason": "dependency is healthy"
+  "outcome": "DEGRADED",
+  "reason": "dependency is healthy",
+  "decisionCounts": {
+    "LIVE": 2,
+    "CACHE": 1,
+    "STALE": 1,
+    "OMIT": 1,
+    "FAIL": 0
+  }
 }
 ```
-

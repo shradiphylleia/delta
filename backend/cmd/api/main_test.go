@@ -61,6 +61,10 @@ func TestPlanEndpointReturnsSummary(t *testing.T) {
 	if res.Outcome != planner.OutcomeComplete {
 		t.Fatalf("expected %s, got %s", planner.OutcomeComplete, res.Outcome)
 	}
+
+	if res.DecisionCounts[planner.DecisionLive] != 1 {
+		t.Fatalf("expected 1 live decision, got %d", res.DecisionCounts[planner.DecisionLive])
+	}
 }
 
 func TestPlanEndpointRejectsInvalidJson(t *testing.T) {

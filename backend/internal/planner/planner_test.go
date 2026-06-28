@@ -202,6 +202,31 @@ func TestCachedDependencyMakesOutcomeDegraded(t *testing.T) {
 	if res.Outcome != OutcomeDegraded {
 		t.Fatalf("expected outcome %s, got %s", OutcomeDegraded, res.Outcome)
 	}
+
+	if res.DecisionCounts[DecisionLive]!=1 {
+		t.Fatalf("expected 1 live decision, got %d", res.DecisionCounts[DecisionLive])
+	}
+
+	if res.DecisionCounts[DecisionCache]!= 1{
+		t.Fatalf("expected 1 cache decision, got %d", res.DecisionCounts[DecisionCache])
+	}
+}
+
+func TestDecisionCountsIncludeZeroValues(t *testing.T) {
+	res := Plan(PlanRequest{
+		Nodes: []Node{
+			{
+				Name:        "Product API",
+				Health:      HealthUp,
+				Criticality: CriticalityRequired,
+				CachePolicy: CachePolicyNone,
+			},
+		},
+	})
+
+	if res.DecisionCounts[DecisionFail] != 0 {
+		t.Fatalf("expected 0 failed decisions, got %d", res.DecisionCounts[DecisionFail])
+	}
 }
 
 func TestValidateNeedsAtLeastOneNode(t *testing.T) {
