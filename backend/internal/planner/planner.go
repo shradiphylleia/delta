@@ -18,6 +18,14 @@ const (
 	DecisionFail  Decision = "FAIL"
 )
 
+type Outcome string
+
+const (
+	OutcomeComplete Outcome = "COMPLETE"
+	OutcomeDegraded Outcome = "DEGRADED"
+	OutcomeFailed   Outcome = "FAILED"
+)
+
 type Criticality string
 
 const (
@@ -63,6 +71,7 @@ type PlanRequest struct {
 type PlanResponse struct {
 	Root      string               `json:"root"`
 	Status    Decision             `json:"status"`
+	Outcome   Outcome              `json:"outcome"`
 	Reason    string               `json:"reason"`
 	Decisions []DependencyDecision `json:"decisions"`
 }
@@ -180,9 +189,24 @@ func Plan(request PlanRequest) PlanResponse {
 	return PlanResponse{
 		Root:      root,
 		Status:    rootDecision.Decision,
+		Outcome:   outcome(rootDecision, decisions),
 		Reason:    rootDecision.Reason,
 		Decisions: decisions,
 	}
+}
+
+func outcome(root DependencyDecision, decisions []DependencyDecision) Outcome {
+	if root.Decision==DecisionFail {
+		return OutcomeFailed
+	}
+
+	for _,item:=range decisions {
+		if item.Decision==DecisionCache||item.Decision==DecisionStale||item.Decision==DecisionOmit {
+			return OutcomeDegraded
+		}
+	}
+
+	return OutcomeComplete
 }
 
 func decide(dep Node) DependencyDecision {

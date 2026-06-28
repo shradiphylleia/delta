@@ -9,14 +9,20 @@ import (
 )
 
 func main() {
+	server := newServer()
+
+	log.Println("delta api listening on :8080")
+	if err:=http.ListenAndServe(":8080",server);err!=nil {
+		log.Fatal(err)
+	}
+}
+
+func newServer() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", handleHealth)
 	mux.HandleFunc("POST /plan", handlePlan)
 
-	log.Println("delta api listening on :8080")
-	if err := http.ListenAndServe(":8080", mux); err != nil {
-		log.Fatal(err)
-	}
+	return mux
 }
 
 func handleHealth(w http.ResponseWriter, r *http.Request) {

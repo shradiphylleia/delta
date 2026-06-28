@@ -1,15 +1,41 @@
 # delta
-the idea of how cdn's could work in a environment where  
+exploring CDN like resilience for composed APIs, where the response is not cached or failed as one object, but planned dependency by dependency under freshness, criticality and failure constraints.
+
+<u> **Example:**</u>
+| Service         | Requirement | Status   | Cache       | Action |
+|----------------|-------------|----------|-------------|--------|
+| Pricing        | REQUIRED    | DOWN     | no cache    | **FAIL** |
+| Inventory      | REQUIRED    | DEGRADED | fresh cache | **CACHE** |
+| Reviews        | OPTIONAL    | DOWN     | stale cache | **STALE** |
+| Recommendations| OPTIONAL    | DOWN     | no cache    | **OMIT** |
+
+the composed resp gets: Product API -> Fail (pricing is required and has no fallback)
 
 # spark note:
 https://www.jeet.world/practical-cdn-caching-for-developers/ by  Jitendra Agrawal
 
-i read this blog about the use of cdn and how they can help optimize user experience. During my time as an intern with Oracle, i was working with apis and systems where service decomposition was the norm so the concept of always online made me think of services which interact and dependent on multiple others for their response. 
+i read this blog about the use of cdn and how they can help optimize user experience. During my time as an intern with Oracle(this project is in no way shape or form realted to them), i was working with apis and systems where service decomposition was the norm so the concept of always online made me think of services which interact and dependent on multiple others for their response. 
 
 how could this idea translate in systems built around many microservices for example where a response is composed of multiple downstream dependencies? 
 could cdn help in providing resilience there or service composition would become the limiting factor?
 
 delta is an exploration on this idea. 
+
+# Understanding at large:
+The core idea of the blog was CDNS improve user experience by caching, reducing origin load & sometimes serving stale content when the origin is down. Thus, the user is kept away from seeing transient origin failures.
+
+Well a CDN can cache one whole respone well when the response is of that nautre i.e. stable and cacheable (more often than not i believe it has to do with the business logic at hand and where the value it provides sits in that pov)
+
+and with the time i have spent at enterprises working across with their data systems, they are not serving one clean object coming from one source. the repsonses served are composed at request time from many services (like during my time with OPERA team @ Oracle, it was about reservations and the linked components you would find to a reservation speaking on a surface level)
+
+this is where service composition would become a limiting factor to my uninterrupted user experience.
+
+So delta here as a table-stakes idea has to for each part of this composed response think should I call live, use cache, serve stale, omit or fail?
+
+## it will answer what would be equivalent of CDn style resilience for dynamically composed API response.
+In CDN based architecture, the unit of decision might usually be the full asset or full response.
+In Delta, the unit of decision is each dependency inside the response.
+
 
 # nomenclature:
 named after geographical features: delta ( class 10 ICSE Geography callback lol)

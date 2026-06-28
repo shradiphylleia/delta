@@ -104,6 +104,10 @@ func TestRequiredChildFailureFailsParent(t *testing.T) {
 	if res.Status != DecisionFail {
 		t.Fatalf("expected response status %s, got %s", DecisionFail, res.Status)
 	}
+
+	if res.Outcome != OutcomeFailed {
+		t.Fatalf("expected outcome %s, got %s", OutcomeFailed, res.Outcome)
+	}
 }
 
 func TestOptionalChildDoesNotFailParent(t *testing.T) {
@@ -138,6 +142,10 @@ func TestOptionalChildDoesNotFailParent(t *testing.T) {
 	if child.Decision != DecisionOmit {
 		t.Fatalf("expected child %s, got %s", DecisionOmit, child.Decision)
 	}
+
+	if res.Outcome != OutcomeDegraded {
+		t.Fatalf("expected outcome %s, got %s", OutcomeDegraded, res.Outcome)
+	}
 }
 
 func TestPlanUsesFirstNodeAsRootWhenRootIsMissing(t *testing.T) {
@@ -158,6 +166,41 @@ func TestPlanUsesFirstNodeAsRootWhenRootIsMissing(t *testing.T) {
 
 	if res.Status != DecisionLive {
 		t.Fatalf("expected %s, got %s", DecisionLive, res.Status)
+	}
+
+	if res.Outcome != OutcomeComplete {
+		t.Fatalf("expected %s, got %s", OutcomeComplete, res.Outcome)
+	}
+}
+
+func TestCachedDependencyMakesOutcomeDegraded(t *testing.T) {
+	res := Plan(PlanRequest{
+		Root: "Product API",
+		Nodes: []Node{
+			{
+				Name:        "Product API",
+				Health:      HealthUp,
+				Criticality: CriticalityRequired,
+				CachePolicy: CachePolicyNone,
+			},
+			{
+				Name:        "Inventory",
+				Health:      HealthDown,
+				Criticality: CriticalityRequired,
+				CachePolicy: CachePolicyFresh,
+			},
+		},
+		Edges: []Edge{
+			{From: "Product API", To: "Inventory"},
+		},
+	})
+
+	if res.Status != DecisionLive {
+		t.Fatalf("expected status %s, got %s", DecisionLive, res.Status)
+	}
+
+	if res.Outcome != OutcomeDegraded {
+		t.Fatalf("expected outcome %s, got %s", OutcomeDegraded, res.Outcome)
 	}
 }
 
