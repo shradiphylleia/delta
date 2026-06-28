@@ -340,6 +340,12 @@ function GraphView({
         })}
       </svg>
 
+      <div className="absolute left-[43%] top-6 flex h-[312px] w-[20%] flex-col justify-between">
+        {deps.map((item) => (
+          <EdgeLabel key={item.name} item={item} />
+        ))}
+      </div>
+
       {root && (
         <div className="absolute left-[5%] top-1/2 w-[28%] -translate-y-1/2">
           <GraphNode item={root} decision={rootDecision} />
@@ -360,15 +366,32 @@ function GraphNode({ item, decision }: { item: Node; decision?: NodeDecision }) 
     <div className={`min-h-[68px] rounded-md border bg-white p-3 shadow-sm ${nodeClass(decision?.decision)}`}>
       <div>
         <div className="truncate text-sm font-semibold">{item.name}</div>
-        <div className="mt-1 flex flex-wrap gap-2 text-xs text-[#667085]">
-          <span>{item.health}</span>
-          <span>{item.criticality}</span>
-          <span>{item.cachePolicy}</span>
+        <div className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
+          <PolicyChip value={item.health} tone={healthTone(item.health)} />
+          <PolicyChip value={item.criticality} tone={item.criticality === "REQUIRED" ? "critical" : "neutral"} />
+          <PolicyChip value={cacheLabel(item.cachePolicy)} tone={item.cachePolicy === "NONE" ? "neutral" : "cache"} />
         </div>
       </div>
       <div className="mt-2">{decision ? <Badge value={decision.decision} /> : <span className="text-xs text-[#98a2b3]">pending</span>}</div>
     </div>
   );
+}
+
+function EdgeLabel({ item }: { item: Node }) {
+  return (
+    <div className="flex h-[68px] items-center justify-center">
+      <div className="rounded-md border border-[#d8dde6] bg-white/90 px-2 py-1 text-center shadow-sm">
+        <div className={`text-[10px] font-semibold ${item.criticality === "REQUIRED" ? "text-[#a31f1f]" : "text-[#475467]"}`}>
+          {item.criticality}
+        </div>
+        <div className="mt-0.5 text-[10px] font-medium text-[#667085]">{cacheLabel(item.cachePolicy)}</div>
+      </div>
+    </div>
+  );
+}
+
+function PolicyChip({ value, tone }: { value: string; tone: "good" | "warn" | "bad" | "cache" | "critical" | "neutral" }) {
+  return <span className={`rounded-md px-1.5 py-1 font-semibold ${policyClass(tone)}`}>{value}</span>;
 }
 
 function SummaryTile({ label, value, tone }: { label: string; value: string; tone?: Decision | Outcome }) {
@@ -420,6 +443,15 @@ function severityClass(value: string) {
   return "bg-[#eef0f3] text-[#475467]";
 }
 
+function policyClass(tone: "good" | "warn" | "bad" | "cache" | "critical" | "neutral") {
+  if (tone === "good") return "bg-[#e7f6ed] text-[#17633a]";
+  if (tone === "warn") return "bg-[#fff4d6] text-[#7a4b00]";
+  if (tone === "bad") return "bg-[#fde7e7] text-[#a31f1f]";
+  if (tone === "cache") return "bg-[#e9f2ff] text-[#175cd3]";
+  if (tone === "critical") return "bg-[#fde7e7] text-[#a31f1f]";
+  return "bg-[#eef0f3] text-[#475467]";
+}
+
 function nodeClass(value?: Decision) {
   if (value === "LIVE") return "border-[#a7dfbf]";
   if (value === "CACHE") return "border-[#a8cfff]";
@@ -441,6 +473,18 @@ function edgeClass(value?: Decision) {
 function graphY(index: number, count: number) {
   if (count <= 1) return 180;
   return 60 + (240 / (count - 1)) * index;
+}
+
+function healthTone(value: Health) {
+  if (value === "UP") return "good";
+  if (value === "DEGRADED") return "warn";
+  return "bad";
+}
+
+function cacheLabel(value: CachePolicy) {
+  if (value === "FRESH") return "FRESH CACHE";
+  if (value === "STALE") return "STALE OK";
+  return "NO CACHE";
 }
 
 function toneText(value?: Decision | Outcome) {
