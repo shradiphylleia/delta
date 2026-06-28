@@ -30,12 +30,20 @@ type NodeDecision = {
   reason: string;
 };
 
+type Impact = {
+  name: string;
+  decision: Decision;
+  severity: string;
+  reason: string;
+};
+
 type PlanResponse = {
   root: string;
   status: Decision;
   outcome: Outcome;
   reason: string;
   decisionCounts: Record<Decision, number>;
+  impacts: Impact[];
   decisions: NodeDecision[];
 };
 
@@ -191,6 +199,8 @@ function App() {
                     </div>
                   ))}
                 </div>
+
+                <ImpactList impacts={plan.impacts} />
               </div>
             ) : (
               <div className="mt-4 rounded-md border border-dashed border-[#c9d1dc] p-5 text-sm text-[#667085]">
@@ -267,6 +277,38 @@ function App() {
     setPlan(null);
     setError("");
   }
+}
+
+function ImpactList({ impacts }: { impacts: Impact[] }) {
+  if (impacts.length === 0) {
+    return (
+      <div className="rounded-md border border-[#cfe8d7] bg-[#f4fbf6] p-3 text-sm text-[#17633a]">
+        No fallback or failure impact in this plan.
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-md border border-[#d8dde6]">
+      <div className="border-b border-[#d8dde6] px-3 py-2 text-xs font-semibold uppercase text-[#667085]">
+        Impact analysis
+      </div>
+      <div className="divide-y divide-[#e5e9ef]">
+        {impacts.map((item) => (
+          <div key={`${item.name}-${item.decision}`} className="p-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-semibold">{item.name}</span>
+              <Badge value={item.decision} />
+              <span className={`rounded-md px-2 py-1 text-xs font-semibold ${severityClass(item.severity)}`}>
+                {item.severity}
+              </span>
+            </div>
+            <div className="mt-2 text-sm text-[#536173]">{item.reason}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function GraphView({
@@ -370,6 +412,12 @@ function badgeClass(value: Decision) {
   if (value === "STALE") return "bg-[#fff4d6] text-[#7a4b00]";
   if (value === "OMIT") return "bg-[#eef0f3] text-[#475467]";
   return "bg-[#fde7e7] text-[#a31f1f]";
+}
+
+function severityClass(value: string) {
+  if (value === "BLOCKING") return "bg-[#fde7e7] text-[#a31f1f]";
+  if (value === "FAILED_DEPENDENCY") return "bg-[#fff0e6] text-[#9a4b00]";
+  return "bg-[#eef0f3] text-[#475467]";
 }
 
 function nodeClass(value?: Decision) {

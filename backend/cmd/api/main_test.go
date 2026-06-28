@@ -67,6 +67,52 @@ func TestPlanEndpointReturnsSummary(t *testing.T) {
 	}
 }
 
+func TestPlanEndpointReturnsImpacts(t *testing.T) {
+	body := `{
+		"root":"Product API",
+		"nodes":[
+			{
+				"name":"Product API",
+				"health":"UP",
+				"criticality":"REQUIRED",
+				"cachePolicy":"NONE"
+			},
+			{
+				"name":"Inventory",
+				"health":"DOWN",
+				"criticality":"REQUIRED",
+				"cachePolicy":"FRESH"
+			}
+		],
+		"edges":[
+			{"from":"Product API","to":"Inventory"}
+		]
+	}`
+
+	req := httptest.NewRequest(http.MethodPost, "/plan", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	newServer().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	var res planner.PlanResponse
+	if err := json.NewDecoder(rec.Body).Decode(&res); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if len(res.Impacts) != 1 {
+		t.Fatalf("expected 1 impact, got %d", len(res.Impacts))
+	}
+
+	if res.Impacts[0].Severity != "DEGRADED" {
+		t.Fatalf("expected DEGRADED impact, got %s", res.Impacts[0].Severity)
+	}
+}
+
 func TestPlanEndpointRejectsInvalidJson(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/plan", bytes.NewBufferString("{"))
 	rec := httptest.NewRecorder()

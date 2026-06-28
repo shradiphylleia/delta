@@ -61,6 +61,13 @@ type DependencyDecision struct {
 	Reason   string   `json:"reason"`
 }
 
+type Impact struct {
+	Name     string   `json:"name"`
+	Decision Decision `json:"decision"`
+	Severity string   `json:"severity"`
+	Reason   string   `json:"reason"`
+}
+
 type PlanRequest struct {
 	Root         string       `json:"root"`
 	Nodes        []Node       `json:"nodes"`
@@ -74,6 +81,7 @@ type PlanResponse struct {
 	Outcome        Outcome              `json:"outcome"`
 	Reason         string               `json:"reason"`
 	DecisionCounts map[Decision]int     `json:"decisionCounts"`
+	Impacts        []Impact             `json:"impacts"`
 	Decisions      []DependencyDecision `json:"decisions"`
 }
 
@@ -193,12 +201,13 @@ func Plan(request PlanRequest) PlanResponse {
 		Outcome:        outcome(rootDecision, decisions),
 		Reason:         rootDecision.Reason,
 		DecisionCounts: countDecisions(decisions),
+		Impacts:        impacts(root, decisions),
 		Decisions:      decisions,
 	}
 }
 
 func countDecisions(decisions []DependencyDecision) map[Decision]int {
-	counts:=map[Decision]int{
+	counts := map[Decision]int{
 		DecisionLive:  0,
 		DecisionCache: 0,
 		DecisionStale: 0,
@@ -206,20 +215,51 @@ func countDecisions(decisions []DependencyDecision) map[Decision]int {
 		DecisionFail:  0,
 	}
 
-	for _,item:=range decisions{
+	for _, item := range decisions {
 		counts[item.Decision]++
 	}
 
 	return counts
 }
 
+func impacts(root string, decisions []DependencyDecision) []Impact {
+	items := make([]Impact, 0)
+
+	for _, item := range decisions {
+		if item.Decision == DecisionLive {
+			continue
+		}
+
+		items = append(items, Impact{
+			Name:     item.Name,
+			Decision: item.Decision,
+			Severity: severity(root, item),
+			Reason:   item.Reason,
+		})
+	}
+
+	return items
+}
+
+func severity(root string, item DependencyDecision) string {
+	if item.Decision == DecisionFail && item.Name == root {
+		return "BLOCKING"
+	}
+
+	if item.Decision == DecisionFail {
+		return "FAILED_DEPENDENCY"
+	}
+
+	return "DEGRADED"
+}
+
 func outcome(root DependencyDecision, decisions []DependencyDecision) Outcome {
-	if root.Decision==DecisionFail {
+	if root.Decision == DecisionFail {
 		return OutcomeFailed
 	}
 
-	for _,item:= range decisions {
-		if item.Decision==DecisionCache||item.Decision==DecisionStale||item.Decision==DecisionOmit{
+	for _, item := range decisions {
+		if item.Decision == DecisionCache || item.Decision == DecisionStale || item.Decision == DecisionOmit {
 			return OutcomeDegraded
 		}
 	}

@@ -108,6 +108,11 @@ func TestRequiredChildFailureFailsParent(t *testing.T) {
 	if res.Outcome != OutcomeFailed {
 		t.Fatalf("expected outcome %s, got %s", OutcomeFailed, res.Outcome)
 	}
+
+	impact := findImpact(t, res, "Product API")
+	if impact.Severity != "BLOCKING" {
+		t.Fatalf("expected BLOCKING impact, got %s", impact.Severity)
+	}
 }
 
 func TestOptionalChildDoesNotFailParent(t *testing.T) {
@@ -145,6 +150,11 @@ func TestOptionalChildDoesNotFailParent(t *testing.T) {
 
 	if res.Outcome != OutcomeDegraded {
 		t.Fatalf("expected outcome %s, got %s", OutcomeDegraded, res.Outcome)
+	}
+
+	impact := findImpact(t, res, "Recommendations")
+	if impact.Severity != "DEGRADED" {
+		t.Fatalf("expected DEGRADED impact, got %s", impact.Severity)
 	}
 }
 
@@ -203,11 +213,11 @@ func TestCachedDependencyMakesOutcomeDegraded(t *testing.T) {
 		t.Fatalf("expected outcome %s, got %s", OutcomeDegraded, res.Outcome)
 	}
 
-	if res.DecisionCounts[DecisionLive]!=1 {
+	if res.DecisionCounts[DecisionLive] != 1 {
 		t.Fatalf("expected 1 live decision, got %d", res.DecisionCounts[DecisionLive])
 	}
 
-	if res.DecisionCounts[DecisionCache]!= 1{
+	if res.DecisionCounts[DecisionCache] != 1 {
 		t.Fatalf("expected 1 cache decision, got %d", res.DecisionCounts[DecisionCache])
 	}
 }
@@ -285,4 +295,17 @@ func findDecision(t *testing.T, res PlanResponse, name string) DependencyDecisio
 
 	t.Fatalf("missing decision for %s", name)
 	return DependencyDecision{}
+}
+
+func findImpact(t *testing.T, res PlanResponse, name string) Impact {
+	t.Helper()
+
+	for _, item := range res.Impacts {
+		if item.Name == name {
+			return item
+		}
+	}
+
+	t.Fatalf("missing impact for %s", name)
+	return Impact{}
 }
