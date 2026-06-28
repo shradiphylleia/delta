@@ -65,14 +65,17 @@ const scenarios: Record<string, PlanRequest> = {
 };
 
 const decisionOrder: Decision[] = ["LIVE", "CACHE", "STALE", "OMIT", "FAIL"];
+const healthOptions: Health[] = ["UP", "DEGRADED", "DOWN"];
+const criticalityOptions: Criticality[] = ["REQUIRED", "OPTIONAL"];
+const cacheOptions: CachePolicy[] = ["NONE", "FRESH", "STALE"];
 
 function App() {
   const [scenarioName, setScenarioName] = useState("Required dependency fails");
+  const [draft, setDraft] = useState<PlanRequest>(() => cloneScenario(scenarios["Required dependency fails"]));
   const [plan, setPlan] = useState<PlanResponse | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const scenario = scenarios[scenarioName];
   const decisionsByName = useMemo(() => {
     const byName = new Map<string, NodeDecision>();
     plan?.decisions.forEach((item) => byName.set(item.name, item));
@@ -87,7 +90,7 @@ function App() {
       const res = await fetch("/plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(scenario)
+        body: JSON.stringify(draft)
       });
 
       if (!res.ok) {
@@ -119,6 +122,7 @@ function App() {
               value={scenarioName}
               onChange={(event) => {
                 setScenarioName(event.target.value);
+                setDraft(cloneScenario(scenarios[event.target.value]));
                 setPlan(null);
                 setError("");
               }}
@@ -127,6 +131,17 @@ function App() {
                 <option key={name}>{name}</option>
               ))}
             </select>
+
+            <button
+              className="h-10 rounded-md border border-[#c9d1dc] bg-white px-4 text-sm font-medium text-[#344054] shadow-sm"
+              onClick={() => {
+                setDraft(cloneScenario(scenarios[scenarioName]));
+                setPlan(null);
+                setError("");
+              }}
+            >
+              Reset
+            </button>
 
             <button
               className="h-10 rounded-md bg-[#1f2937] px-4 text-sm font-medium text-white shadow-sm disabled:cursor-not-allowed disabled:bg-[#7a8594]"
@@ -148,10 +163,10 @@ function App() {
           <div className="rounded-md border border-[#d8dde6] bg-white p-4 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-base font-semibold">Composition graph</h2>
-              <span className="text-xs text-[#667085]">{scenario.nodes.length} nodes</span>
+              <span className="text-xs text-[#667085]">{draft.nodes.length} nodes</span>
             </div>
 
-            <GraphView scenario={scenario} decisionsByName={decisionsByName} />
+            <GraphView scenario={draft} decisionsByName={decisionsByName} />
           </div>
 
           <div className="rounded-md border border-[#d8dde6] bg-white p-4 shadow-sm">
@@ -203,14 +218,32 @@ function App() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#e5e9ef]">
-                {scenario.nodes.map((item) => {
+                {draft.nodes.map((item) => {
                   const decision = decisionsByName.get(item.name);
                   return (
                     <tr key={item.name}>
                       <td className="px-4 py-3 font-medium">{item.name}</td>
-                      <td className="px-4 py-3">{item.health}</td>
-                      <td className="px-4 py-3">{item.criticality}</td>
-                      <td className="px-4 py-3">{item.cachePolicy}</td>
+                      <td className="px-4 py-3">
+                        <SelectValue
+                          value={item.health}
+                          options={healthOptions}
+                          onChange={(value) => updateNode(item.name, { health: value })}
+                        />
+                      </td>
+                      <td className="px-4 py-3">
+                        <SelectValue
+                          value={item.criticality}
+                          options={criticalityOptions}
+                          onChange={(value) => updateNode(item.name, { criticality: value })}
+                        />
+                      </td>
+                      <td className="px-4 py-3">
+                        <SelectValue
+                          value={item.cachePolicy}
+                          options={cacheOptions}
+                          onChange={(value) => updateNode(item.name, { cachePolicy: value })}
+                        />
+                      </td>
                       <td className="px-4 py-3">
                         {decision ? <Badge value={decision.decision} /> : <span className="text-[#98a2b3]">pending</span>}
                       </td>
@@ -225,6 +258,15 @@ function App() {
       </div>
     </main>
   );
+
+  function updateNode(name: string, patch: Partial<Node>) {
+    setDraft((current) => ({
+      ...current,
+      nodes: current.nodes.map((item) => (item.name === name ? { ...item, ...patch } : item))
+    }));
+    setPlan(null);
+    setError("");
+  }
 }
 
 function GraphView({
@@ -296,6 +338,28 @@ function SummaryTile({ label, value, tone }: { label: string; value: string; ton
   );
 }
 
+function SelectValue<T extends string>({
+  value,
+  options,
+  onChange
+}: {
+  value: T;
+  options: T[];
+  onChange: (value: T) => void;
+}) {
+  return (
+    <select
+      className="h-9 min-w-[118px] rounded-md border border-[#c9d1dc] bg-white px-2 text-xs font-medium text-[#344054]"
+      value={value}
+      onChange={(event) => onChange(event.target.value as T)}
+    >
+      {options.map((option) => (
+        <option key={option}>{option}</option>
+      ))}
+    </select>
+  );
+}
+
 function Badge({ value }: { value: Decision }) {
   return <span className={`inline-flex rounded-md px-2 py-1 text-xs font-semibold ${badgeClass(value)}`}>{value}</span>;
 }
@@ -351,6 +415,14 @@ function productEdges(): Edge[] {
     { from: "Product API", to: "Reviews" },
     { from: "Product API", to: "Recommendations" }
   ];
+}
+
+function cloneScenario(scenario: PlanRequest): PlanRequest {
+  return {
+    root: scenario.root,
+    nodes: scenario.nodes.map((item) => ({ ...item })),
+    edges: scenario.edges.map((item) => ({ ...item }))
+  };
 }
 
 export default App;
