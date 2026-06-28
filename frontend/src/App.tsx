@@ -147,16 +147,11 @@ function App() {
         <section className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
           <div className="rounded-md border border-[#d8dde6] bg-white p-4 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-base font-semibold">Service graph</h2>
+              <h2 className="text-base font-semibold">Composition graph</h2>
               <span className="text-xs text-[#667085]">{scenario.nodes.length} nodes</span>
             </div>
 
-            <div className="grid gap-3">
-              {scenario.nodes.map((item) => {
-                const decision = decisionsByName.get(item.name);
-                return <NodeRow key={item.name} item={item} decision={decision} />;
-              })}
-            </div>
+            <GraphView scenario={scenario} decisionsByName={decisionsByName} />
           </div>
 
           <div className="rounded-md border border-[#d8dde6] bg-white p-4 shadow-sm">
@@ -232,18 +227,62 @@ function App() {
   );
 }
 
-function NodeRow({ item, decision }: { item: Node; decision?: NodeDecision }) {
+function GraphView({
+  scenario,
+  decisionsByName
+}: {
+  scenario: PlanRequest;
+  decisionsByName: Map<string, NodeDecision>;
+}) {
+  const root = scenario.nodes.find((item) => item.name === scenario.root);
+  const deps = scenario.nodes.filter((item) => item.name !== scenario.root);
+  const rootDecision = root ? decisionsByName.get(root.name) : undefined;
+
   return (
-    <div className="grid gap-3 rounded-md border border-[#d8dde6] bg-[#fbfcfe] p-3 sm:grid-cols-[1fr_auto] sm:items-center">
+    <div className="relative min-h-[360px] overflow-hidden rounded-md border border-[#d8dde6] bg-[#f8fafc]">
+      <svg className="absolute inset-0 h-full w-full" viewBox="0 0 900 360" preserveAspectRatio="none" aria-hidden="true">
+        {deps.map((item, index) => {
+          const y = graphY(index, deps.length);
+          const decision = decisionsByName.get(item.name)?.decision;
+          return (
+            <path
+              key={item.name}
+              d={`M 254 180 C 390 180, 420 ${y}, 560 ${y}`}
+              className={edgeClass(decision)}
+              fill="none"
+              strokeWidth="2"
+            />
+          );
+        })}
+      </svg>
+
+      {root && (
+        <div className="absolute left-[5%] top-1/2 w-[28%] -translate-y-1/2">
+          <GraphNode item={root} decision={rootDecision} />
+        </div>
+      )}
+
+      <div className="absolute right-[5%] top-6 flex h-[312px] w-[34%] flex-col justify-between">
+        {deps.map((item) => (
+          <GraphNode key={item.name} item={item} decision={decisionsByName.get(item.name)} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function GraphNode({ item, decision }: { item: Node; decision?: NodeDecision }) {
+  return (
+    <div className={`min-h-[68px] rounded-md border bg-white p-3 shadow-sm ${nodeClass(decision?.decision)}`}>
       <div>
-        <div className="font-medium">{item.name}</div>
+        <div className="truncate text-sm font-semibold">{item.name}</div>
         <div className="mt-1 flex flex-wrap gap-2 text-xs text-[#667085]">
           <span>{item.health}</span>
           <span>{item.criticality}</span>
           <span>{item.cachePolicy}</span>
         </div>
       </div>
-      {decision ? <Badge value={decision.decision} /> : <span className="text-sm text-[#98a2b3]">pending</span>}
+      <div className="mt-2">{decision ? <Badge value={decision.decision} /> : <span className="text-xs text-[#98a2b3]">pending</span>}</div>
     </div>
   );
 }
@@ -269,6 +308,29 @@ function badgeClass(value: Decision) {
   return "bg-[#fde7e7] text-[#a31f1f]";
 }
 
+function nodeClass(value?: Decision) {
+  if (value === "LIVE") return "border-[#a7dfbf]";
+  if (value === "CACHE") return "border-[#a8cfff]";
+  if (value === "STALE") return "border-[#f2cc72]";
+  if (value === "OMIT") return "border-[#cbd3dd]";
+  if (value === "FAIL") return "border-[#f0a3a3]";
+  return "border-[#d8dde6]";
+}
+
+function edgeClass(value?: Decision) {
+  if (value === "LIVE") return "stroke-[#2e8b57]";
+  if (value === "CACHE") return "stroke-[#2f6fbd]";
+  if (value === "STALE") return "stroke-[#c98712]";
+  if (value === "OMIT") return "stroke-[#8a94a3]";
+  if (value === "FAIL") return "stroke-[#d14343]";
+  return "stroke-[#c4ccd8]";
+}
+
+function graphY(index: number, count: number) {
+  if (count <= 1) return 180;
+  return 60 + (240 / (count - 1)) * index;
+}
+
 function toneText(value?: Decision | Outcome) {
   if (value === "LIVE" || value === "COMPLETE") return "text-[#17633a]";
   if (value === "CACHE") return "text-[#175cd3]";
@@ -292,4 +354,3 @@ function productEdges(): Edge[] {
 }
 
 export default App;
-
