@@ -2,6 +2,7 @@ learning.md
 .gocache/
 backend/bin/
 backend/*.exe
+backend/.env
 .pnpm-store/
 frontend/node_modules/
 frontend/dist/

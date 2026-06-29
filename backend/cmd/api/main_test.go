@@ -134,3 +134,18 @@ func TestPlanEndpointRejectsInvalidPlan(t *testing.T) {
 		t.Fatalf("expected %d, got %d", http.StatusBadRequest, rec.Code)
 	}
 }
+
+func TestGraphFromTextNeedsConfiguredToken(t *testing.T) {
+	t.Setenv("HF_API_TOKEN", "")
+
+	body := `{"text":"Dashboard API depends on User."}`
+	req := httptest.NewRequest(http.MethodPost, "/graphs/from-text", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	newServer().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("expected %d, got %d", http.StatusBadGateway, rec.Code)
+	}
+}

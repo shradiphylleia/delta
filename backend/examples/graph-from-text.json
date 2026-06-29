@@ -1,0 +1,4 @@
+{
+  "text": "The Dashboard API depends on User, Orders, Inventory and Recommendations. Recommendations depends on User Profile."
+}
+
