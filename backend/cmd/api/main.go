@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	"delta/backend/internal/graphgen"
 	"delta/backend/internal/hf"
@@ -12,11 +14,43 @@ import (
 )
 
 func main() {
+	loadEnv(".env")
 	server := newServer()
 
 	log.Println("delta api listening on :8080")
 	if err := http.ListenAndServe(":8080", server); err != nil {
 		log.Fatal(err)
+	}
+}
+
+func loadEnv(path string) {
+	file, err := os.Open(path)
+	if err != nil {
+		return
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		key, value, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+
+		key = strings.TrimSpace(key)
+		value = strings.Trim(strings.TrimSpace(value), `"'`)
+		if key == "" || os.Getenv(key) != "" {
+			continue
+		}
+
+		if err := os.Setenv(key, value); err != nil {
+			log.Printf("load env %s: %v", key, err)
+		}
 	}
 }
 
@@ -62,10 +96,6 @@ func handleGraphFromText(w http.ResponseWriter, r *http.Request) {
 	}
 
 	model := os.Getenv("HF_MODEL")
-	if model == "" {
-		model = "google/gemma-3-4b-it"
-	}
-
 	gen := graphgen.New(hf.NewClient(os.Getenv("HF_API_TOKEN"), model))
 	graph, err := gen.Generate(r.Context(), req.Text)
 	if err != nil {
