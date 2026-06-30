@@ -195,11 +195,12 @@ func Plan(request PlanRequest) PlanResponse {
 	}
 
 	rootDecision := byDecision[root]
+	status, reason := responseStatus(rootDecision, decisions)
 	return PlanResponse{
 		Root:           root,
-		Status:         rootDecision.Decision,
+		Status:         status,
 		Outcome:        outcome(rootDecision, decisions),
-		Reason:         rootDecision.Reason,
+		Reason:         reason,
 		DecisionCounts: countDecisions(decisions),
 		Impacts:        impacts(root, decisions),
 		Decisions:      decisions,
@@ -251,6 +252,44 @@ func severity(root string, item DependencyDecision) string {
 	}
 
 	return "DEGRADED"
+}
+
+func responseStatus(root DependencyDecision, decisions []DependencyDecision) (Decision, string) {
+	if root.Decision == DecisionFail {
+		return DecisionFail, root.Reason
+	}
+
+	for _, item := range decisions {
+		if item.Name == root.Name {
+			continue
+		}
+
+		if item.Decision == DecisionFail {
+			return DecisionFail, "required dependency " + item.Name + " failed"
+		}
+	}
+
+	for _, item := range decisions {
+		if item.Name == root.Name {
+			continue
+		}
+
+		if item.Decision == DecisionStale {
+			return DecisionStale, "response uses stale data from " + item.Name
+		}
+	}
+
+	for _, item := range decisions {
+		if item.Name == root.Name {
+			continue
+		}
+
+		if item.Decision == DecisionCache {
+			return DecisionCache, "response uses fresh cache from " + item.Name
+		}
+	}
+
+	return root.Decision, root.Reason
 }
 
 func outcome(root DependencyDecision, decisions []DependencyDecision) Outcome {

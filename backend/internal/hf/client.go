@@ -13,7 +13,7 @@ import (
 )
 
 // take from env or populate idhar
-const defaultURL = ""
+const defaultURL = "https://router.huggingface.co/v1/chat/completions"
 
 type Client struct {
 	token      string
