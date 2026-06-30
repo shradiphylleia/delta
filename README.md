@@ -33,7 +33,7 @@ npm run dev
 delta will be available here: http://127.0.0.1:5173/
 
 # look & feel
-
+https://github.com/user-attachments/assets/d462c6a7-bcfa-4654-9dc8-0d66e9cad8fd
 
 # spark note:
 https://www.jeet.world/practical-cdn-caching-for-developers/ by  Jitendra Agrawal
