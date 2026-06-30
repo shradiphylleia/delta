@@ -563,13 +563,13 @@ function GraphView({
   const root = scenario.nodes.find((item) => item.name === scenario.root);
   const deps = scenario.nodes.filter((item) => item.name !== scenario.root);
   const rootDecision = root ? decisionsByName.get(root.name) : undefined;
-  const rowHeight = 112;
-  const nodeHeight = 88;
-  const graphWidth = 720;
-  const rootX = 24;
-  const rootWidth = 190;
-  const depX = 466;
-  const depWidth = 230;
+  const rowHeight = 138;
+  const nodeHeight = 108;
+  const graphWidth = 960;
+  const rootX = 28;
+  const rootWidth = 260;
+  const depX = 620;
+  const depWidth = 300;
   const rootY = Math.max(136, deps.length * rowHeight / 2);
   const graphHeight = Math.max(360, deps.length * rowHeight + 64);
 
@@ -585,7 +585,7 @@ function GraphView({
             return (
               <path
                 key={item.name}
-                d={`M ${rootX + rootWidth} ${rootY + nodeHeight / 2} C 300 ${rootY + nodeHeight / 2}, 330 ${y}, ${depX} ${y}`}
+                d={`M ${rootX + rootWidth} ${rootY + nodeHeight / 2} C 390 ${rootY + nodeHeight / 2}, 470 ${y}, ${depX} ${y}`}
                 className={edgeStrokeClass(decision)}
                 fill="none"
                 strokeWidth="2"
@@ -604,7 +604,7 @@ function GraphView({
           const top = depY(index, rowHeight);
           return (
             <div key={item.name}>
-              <div className="absolute" style={{ left: 262, top: top + 22, width: 142 }}>
+              <div className="absolute" style={{ left: 360, top: top + 30, width: 170 }}>
                 <EdgeLabel item={item} />
               </div>
               <div className="absolute" style={{ left: depX, top, width: depWidth }}>
@@ -630,18 +630,29 @@ function GraphNode({
   return (
     <div
       className={`relative z-10 w-full rounded-md border bg-white p-3 shadow-sm ${nodeClass(decision?.decision)} ${
-        variant === "root" ? "min-h-[96px]" : "min-h-[80px]"
+        variant === "root" ? "min-h-[112px]" : "min-h-[104px]"
       }`}
     >
       <div>
-        <div className="break-words text-sm font-semibold leading-5">{item.name}</div>
+        <div className="break-words text-base font-semibold leading-5">{item.name}</div>
         <div className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
-          <PolicyChip value={item.health} tone={healthTone(item.health)} />
-          <PolicyChip value={item.criticality} tone={item.criticality === "REQUIRED" ? "critical" : "neutral"} />
-          <PolicyChip value={cacheLabel(item.cachePolicy)} tone={item.cachePolicy === "NONE" ? "neutral" : "cache"} />
+          <PolicyChip value={item.health} tone={healthTone(item.health)} title={`health: ${item.health}`} />
+          <PolicyChip
+            value={item.criticality}
+            tone={item.criticality === "REQUIRED" ? "critical" : "neutral"}
+            title={`criticality: ${item.criticality}`}
+          />
+          <PolicyChip
+            value={cacheLabel(item.cachePolicy)}
+            tone={item.cachePolicy === "NONE" ? "neutral" : "cache"}
+            title={`cache policy: ${item.cachePolicy}`}
+          />
         </div>
       </div>
-      <div className="mt-2">{decision ? <Badge value={decision.decision} /> : <span className="text-xs text-[#98a2b3]">pending</span>}</div>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <span className="text-[11px] font-semibold uppercase text-[#667085]">Decision</span>
+        {decision ? <Badge value={decision.decision} /> : <span className="text-xs text-[#98a2b3]">pending</span>}
+      </div>
     </div>
   );
 }
@@ -657,8 +668,20 @@ function EdgeLabel({ item }: { item: Node }) {
   );
 }
 
-function PolicyChip({ value, tone }: { value: string; tone: "good" | "warn" | "bad" | "cache" | "critical" | "neutral" }) {
-  return <span className={`rounded-md px-1.5 py-1 font-semibold ${policyClass(tone)}`}>{value}</span>;
+function PolicyChip({
+  value,
+  tone,
+  title
+}: {
+  value: string;
+  tone: "good" | "warn" | "bad" | "cache" | "critical" | "neutral";
+  title?: string;
+}) {
+  return (
+    <span className={`rounded-md px-1.5 py-1 font-semibold ${policyClass(tone)}`} title={title}>
+      {value}
+    </span>
+  );
 }
 
 function SummaryTile({ label, value, tone }: { label: string; value: string; tone?: Decision | Outcome }) {
