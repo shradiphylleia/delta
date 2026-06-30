@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+
 	"delta/backend/internal/planner"
 )
 
@@ -44,7 +45,7 @@ func (g Generator) Generate(ctx context.Context, text string) (planner.PlanReque
 	return graph, nil
 }
 
-// prompting the model to get the json similar to what it already does. 
+// prompting the model to get the json similar to what it already does.
 // input will be taken and then converted to structured json
 
 func prompt(text string) string {
@@ -70,11 +71,86 @@ func decodeGraph(raw string) (planner.PlanRequest, error) {
 	if err != nil {
 		return planner.PlanRequest{}, err
 	}
-	var graph planner.PlanRequest
-	if err := json.Unmarshal([]byte(jsonText), &graph); err != nil {
+
+	var draft struct {
+		Root         json.RawMessage      `json:"root"`
+		Nodes        []planner.Node       `json:"nodes"`
+		Edges        []rawEdge            `json:"edges"`
+		Dependencies []planner.Dependency `json:"dependencies,omitempty"`
+	}
+	if err := json.Unmarshal([]byte(jsonText), &draft); err != nil {
 		return planner.PlanRequest{}, err
 	}
+
+	root, rootNode, err := decodeRoot(draft.Root)
+	if err != nil {
+		return planner.PlanRequest{}, err
+	}
+
+	nodes := draft.Nodes
+	if rootNode.Name != "" && !hasNode(nodes, rootNode.Name) {
+		nodes = append([]planner.Node{rootNode}, nodes...)
+	}
+
+	graph := planner.PlanRequest{
+		Root:         root,
+		Nodes:        nodes,
+		Edges:        decodeEdges(draft.Edges),
+		Dependencies: draft.Dependencies,
+	}
 	return graph, nil
+}
+
+type rawEdge struct {
+	From   string `json:"from"`
+	To     string `json:"to"`
+	Source string `json:"source"`
+	Target string `json:"target"`
+}
+
+func decodeRoot(raw json.RawMessage) (string, planner.Node, error) {
+	if len(raw) == 0 {
+		return "", planner.Node{}, nil
+	}
+
+	var name string
+	if err := json.Unmarshal(raw, &name); err == nil {
+		return name, planner.Node{}, nil
+	}
+
+	var node planner.Node
+	if err := json.Unmarshal(raw, &node); err == nil && node.Name != "" {
+		return node.Name, node, nil
+	}
+
+	return "", planner.Node{}, errors.New("root must be a string or an object with name")
+}
+
+func decodeEdges(items []rawEdge) []planner.Edge {
+	edges := make([]planner.Edge, 0, len(items))
+	for _, item := range items {
+		from := item.From
+		if from == "" {
+			from = item.Source
+		}
+
+		to := item.To
+		if to == "" {
+			to = item.Target
+		}
+
+		edges = append(edges, planner.Edge{From: from, To: to})
+	}
+	return edges
+}
+
+func hasNode(nodes []planner.Node, name string) bool {
+	for _, node := range nodes {
+		if node.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 func extractJSON(raw string) (string, error) {
