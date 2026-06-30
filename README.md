@@ -11,6 +11,30 @@ exploring CDN like resilience for composed APIs, where the response is not cache
 
 the composed resp gets: Product API -> Fail (pricing is required and has no fallback)
 
+# Setting up locally:
+
+Configure with hugging face: (optional, required only for nautral lang based queries)
+Run the following command and configure your api token and model of choice(personally used: Qwen/Qwen2.5-7B-Instruct )
+
+``` bash
+echo -e "HF_API_TOKEN= \n HF_MODEL=" >.test
+```
+Backend
+``` bash
+cd backend
+go run ./cmd/api
+```
+
+Frontend (run in another terminal):
+```bash
+cd frontend
+npm run dev
+```
+delta will be available here: http://127.0.0.1:5173/
+
+# look & feel
+
+
 # spark note:
 https://www.jeet.world/practical-cdn-caching-for-developers/ by  Jitendra Agrawal
 
@@ -46,3 +70,7 @@ A river delta forms where many flows slow down, branch and deposit sediment befo
 delta explores what happens at that meeting point.
 
 instead of treating an API response as all-or-nothing, delta asks which parts should be live, cached, stale, omitted or failed when conditions change. The project is about making response composition intentional under partial failure, much like a river delta is shaped by the many streams and sediments that flow into it.
+
+## shortcomings
+console level does not log the runs at the moment poses difficulty esp with hugging face wiring and not wired status check(currently validation is via frontend) //open to collab- open a pr or get in touch: shradulsha@gmail.com
+maybe could become a plug (would need to see how to infer incoming data or information stream on microservice setup)[ambitious]
