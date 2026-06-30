@@ -47,8 +47,12 @@ type PlanResponse = {
   decisions: NodeDecision[];
 };
 
+type GraphTextResponse = PlanRequest;
+type DependencyInputMode = "natural" | "json";
+type WorkView = "both" | "graph" | "decisions";
+
 const scenarios: Record<string, PlanRequest> = {
-  "Required dependency fails": {
+  "Pricing outage blocks response": {
     root: "Product API",
     nodes: [
       node("Product API", "UP", "REQUIRED", "NONE"),
@@ -59,7 +63,7 @@ const scenarios: Record<string, PlanRequest> = {
     ],
     edges: productEdges()
   },
-  "Response survives degraded": {
+  "Response survives with fallbacks": {
     root: "Product API",
     nodes: [
       node("Product API", "UP", "REQUIRED", "NONE"),
@@ -78,11 +82,16 @@ const criticalityOptions: Criticality[] = ["REQUIRED", "OPTIONAL"];
 const cacheOptions: CachePolicy[] = ["NONE", "FRESH", "STALE"];
 
 function App() {
-  const [scenarioName, setScenarioName] = useState("Required dependency fails");
-  const [draft, setDraft] = useState<PlanRequest>(() => cloneScenario(scenarios["Required dependency fails"]));
+  const [scenarioName, setScenarioName] = useState("Pricing outage blocks response");
+  const [draft, setDraft] = useState<PlanRequest>(() => cloneScenario(scenarios["Pricing outage blocks response"]));
   const [plan, setPlan] = useState<PlanResponse | null>(null);
   const [error, setError] = useState("");
+  const [graphText, setGraphText] = useState("The Dashboard API depends on User, Orders, Inventory and Recommendations. Recommendations depends on User Profile.");
+  const [jsonText, setJsonText] = useState(() => JSON.stringify(scenarios["Pricing outage blocks response"], null, 2));
+  const [inputMode, setInputMode] = useState<DependencyInputMode>("natural");
+  const [workView, setWorkView] = useState<WorkView>("both");
   const [loading, setLoading] = useState(false);
+  const [generating, setGenerating] = useState(false);
 
   const decisionsByName = useMemo(() => {
     const byName = new Map<string, NodeDecision>();
@@ -115,13 +124,70 @@ function App() {
     }
   }
 
+  async function generateGraph() {
+    setGenerating(true);
+    setError("");
+
+    try {
+      const res = await fetch("/graphs/from-text", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: graphText })
+      });
+
+      if (!res.ok) {
+        const body = await res.json();
+        throw new Error(body.error || "graph generation failed");
+      }
+
+      const graph = (await res.json()) as GraphTextResponse;
+      loadDraft(graph, "AI generated draft");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "graph generation failed");
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  function applyJSONDraft() {
+    setError("");
+
+    try {
+      const graph = JSON.parse(jsonText) as PlanRequest;
+      if (!graph.root || !Array.isArray(graph.nodes) || !Array.isArray(graph.edges)) {
+        throw new Error("json must include root, nodes and edges");
+      }
+
+      loadDraft(graph, "JSON draft");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "invalid graph json");
+    }
+  }
+
   return (
     <main className="min-h-screen bg-[#f7f8fa] text-[#111827]">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-6 py-6">
-        <header className="flex flex-wrap items-end justify-between gap-4 border-b border-[#d8dde6] pb-5">
+      <section className="grainy-gradient relative flex min-h-screen items-center justify-center">
+        <svg className="absolute h-0 w-0" aria-hidden="true">
+          <filter id="grainy-filter">
+            <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="4" stitchTiles="stitch" />
+            <feColorMatrix type="saturate" values="0" />
+          </filter>
+        </svg>
+        <div className="relative text-center">
+          <div className="font-['Montserrat'] text-[55px] font-bold  tracking-normal text-[#111827] blur-[0.2px]">
+            delta
+          </div>
+          <div className="mt-1 text-[14px] text-white">
+            dependency aware service composition
+          </div>
+        </div>
+      </section>
+
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-9 px-6 py-10">
+        <header className="mx-auto flex w-full max-w-6xl flex-wrap items-end justify-between gap-4 border-b border-[#d8dde6] pb-5">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-[#536173]">Delta</p>
-            <h1 className="mt-1 text-2xl font-semibold">Response composition planner</h1>
+            <p className="text-[18px] font-semibold  tracking-wide text-[#536173]">Planning console</p>
+            <h1 className="mt-1 text-2xl font-semibold">Compose response plan</h1>
           </div>
 
           <div className="flex items-center gap-3">
@@ -130,11 +196,11 @@ function App() {
               value={scenarioName}
               onChange={(event) => {
                 setScenarioName(event.target.value);
-                setDraft(cloneScenario(scenarios[event.target.value]));
-                setPlan(null);
-                setError("");
+                loadDraft(scenarios[event.target.value], event.target.value);
               }}
             >
+              {scenarioName === "AI generated draft" && <option>AI generated draft</option>}
+              {scenarioName === "JSON draft" && <option>JSON draft</option>}
               {Object.keys(scenarios).map((name) => (
                 <option key={name}>{name}</option>
               ))}
@@ -143,20 +209,14 @@ function App() {
             <button
               className="h-10 rounded-md border border-[#c9d1dc] bg-white px-4 text-sm font-medium text-[#344054] shadow-sm"
               onClick={() => {
-                setDraft(cloneScenario(scenarios[scenarioName]));
-                setPlan(null);
-                setError("");
+                const scenario = scenarios[scenarioName] || scenarios["Pricing outage blocks response"];
+                loadDraft(scenario, scenarios[scenarioName] ? scenarioName : "Pricing outage blocks response");
+                if (!scenarios[scenarioName]) {
+                  setScenarioName("Pricing outage blocks response");
+                }
               }}
             >
               Reset
-            </button>
-
-            <button
-              className="h-10 rounded-md bg-[#1f2937] px-4 text-sm font-medium text-white shadow-sm disabled:cursor-not-allowed disabled:bg-[#7a8594]"
-              disabled={loading}
-              onClick={runPlan}
-            >
-              {loading ? "Planning" : "Run plan"}
             </button>
           </div>
         </header>
@@ -167,104 +227,68 @@ function App() {
           </section>
         )}
 
-        <section className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
-          <div className="rounded-md border border-[#d8dde6] bg-white p-4 shadow-sm">
+        <DefineDependenciesPanel
+          inputMode={inputMode}
+          setInputMode={setInputMode}
+          graphText={graphText}
+          setGraphText={setGraphText}
+          jsonText={jsonText}
+          setJsonText={setJsonText}
+          generating={generating}
+          generateGraph={generateGraph}
+          applyJSONDraft={applyJSONDraft}
+        />
+
+        <section className="mx-auto w-full max-w-6xl rounded-md border border-[#d8dde6] bg-white p-4 shadow-sm">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-base font-semibold">Composition workspace</h2>
+              <p className="mt-1 text-sm text-[#667085]">Choose how you want to inspect the current dependency draft.</p>
+            </div>
+            <SegmentedControl value={workView} setValue={setWorkView} />
+          </div>
+
+          <div className="grid gap-4">
+            {(workView === "both" || workView === "decisions") && (
+              <DependencyTable draft={draft} decisionsByName={decisionsByName} updateNode={updateNode} />
+            )}
+
+            {(workView === "both" || workView === "graph") && (
+              <div className="rounded-md border border-[#d8dde6] bg-white p-4 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-base font-semibold">Composition graph</h2>
               <span className="text-xs text-[#667085]">{draft.nodes.length} nodes</span>
             </div>
 
             <GraphView scenario={draft} decisionsByName={decisionsByName} />
+
+            <button
+              className="mt-4 h-10 w-full rounded-md bg-[#1f2937] px-4 text-sm font-medium text-white shadow-sm disabled:cursor-not-allowed disabled:bg-[#7a8594]"
+              disabled={loading}
+              onClick={runPlan}
+            >
+              {loading ? "Planning" : "Run plan"}
+            </button>
           </div>
-
-          <div className="rounded-md border border-[#d8dde6] bg-white p-4 shadow-sm">
-            <h2 className="text-base font-semibold">Plan summary</h2>
-            {plan ? (
-              <div className="mt-4 space-y-4">
-                <div className="grid grid-cols-3 gap-3">
-                  <SummaryTile label="root" value={plan.root} />
-                  <SummaryTile label="status" value={plan.status} tone={plan.status} />
-                  <SummaryTile label="outcome" value={plan.outcome} tone={plan.outcome} />
-                </div>
-
-                <div className="rounded-md border border-[#d8dde6] bg-[#fafbfc] p-3 text-sm text-[#344054]">
-                  {plan.reason}
-                </div>
-
-                <div className="grid grid-cols-5 gap-2">
-                  {decisionOrder.map((decision) => (
-                    <div key={decision} className="rounded-md border border-[#d8dde6] p-3 text-center">
-                      <div className="text-lg font-semibold">{plan.decisionCounts[decision]}</div>
-                      <div className="mt-1 text-[11px] font-medium text-[#667085]">{decision}</div>
-                    </div>
-                  ))}
-                </div>
-
-                <ImpactList impacts={plan.impacts} />
-              </div>
-            ) : (
-              <div className="mt-4 rounded-md border border-dashed border-[#c9d1dc] p-5 text-sm text-[#667085]">
-                Run a scenario to see the composed response plan.
-              </div>
             )}
           </div>
+
+          {workView === "decisions" && (
+            <button
+              className="mt-4 h-10 w-full rounded-md bg-[#1f2937] px-4 text-sm font-medium text-white shadow-sm disabled:cursor-not-allowed disabled:bg-[#7a8594]"
+              disabled={loading}
+              onClick={runPlan}
+            >
+              {loading ? "Planning" : "Run plan"}
+            </button>
+          )}
         </section>
 
-        <section className="rounded-md border border-[#d8dde6] bg-white shadow-sm">
-          <div className="border-b border-[#d8dde6] px-4 py-3">
-            <h2 className="text-base font-semibold">Dependency decisions</h2>
-          </div>
+        <PlanSummary plan={plan} />
 
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] text-left text-sm">
-              <thead className="bg-[#f0f3f7] text-xs uppercase text-[#536173]">
-                <tr>
-                  <th className="px-4 py-3 font-semibold">Dependency</th>
-                  <th className="px-4 py-3 font-semibold">Health</th>
-                  <th className="px-4 py-3 font-semibold">Criticality</th>
-                  <th className="px-4 py-3 font-semibold">Cache</th>
-                  <th className="px-4 py-3 font-semibold">Decision</th>
-                  <th className="px-4 py-3 font-semibold">Reason</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#e5e9ef]">
-                {draft.nodes.map((item) => {
-                  const decision = decisionsByName.get(item.name);
-                  return (
-                    <tr key={item.name}>
-                      <td className="px-4 py-3 font-medium">{item.name}</td>
-                      <td className="px-4 py-3">
-                        <SelectValue
-                          value={item.health}
-                          options={healthOptions}
-                          onChange={(value) => updateNode(item.name, { health: value })}
-                        />
-                      </td>
-                      <td className="px-4 py-3">
-                        <SelectValue
-                          value={item.criticality}
-                          options={criticalityOptions}
-                          onChange={(value) => updateNode(item.name, { criticality: value })}
-                        />
-                      </td>
-                      <td className="px-4 py-3">
-                        <SelectValue
-                          value={item.cachePolicy}
-                          options={cacheOptions}
-                          onChange={(value) => updateNode(item.name, { cachePolicy: value })}
-                        />
-                      </td>
-                      <td className="px-4 py-3">
-                        {decision ? <Badge value={decision.decision} /> : <span className="text-[#98a2b3]">pending</span>}
-                      </td>
-                      <td className="px-4 py-3 text-[#536173]">{decision?.reason || "not planned yet"}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </section>
+        <footer className="py-8 text-center text-sm text-[#667085]">
+          made with love for curiosity during nights and days by shraddha
+        </footer>
       </div>
     </main>
   );
@@ -277,6 +301,224 @@ function App() {
     setPlan(null);
     setError("");
   }
+
+  function loadDraft(graph: PlanRequest, name: string) {
+    const next = cloneScenario(graph);
+    setDraft(next);
+    setJsonText(JSON.stringify(next, null, 2));
+    setPlan(null);
+    setError("");
+    setScenarioName(name);
+  }
+}
+
+function DependencyTable({
+  draft,
+  decisionsByName,
+  updateNode
+}: {
+  draft: PlanRequest;
+  decisionsByName: Map<string, NodeDecision>;
+  updateNode: (name: string, patch: Partial<Node>) => void;
+}) {
+  return (
+    <section className="rounded-md border border-[#d8dde6] bg-white shadow-sm">
+      <div className="border-b border-[#d8dde6] px-4 py-3">
+        <h2 className="text-base font-semibold">Dependency decisions</h2>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[760px] text-left text-sm">
+          <thead className="bg-[#f0f3f7] text-xs uppercase text-[#536173]">
+            <tr>
+              <th className="px-4 py-3 font-semibold">Dependency</th>
+              <th className="px-4 py-3 font-semibold">Health</th>
+              <th className="px-4 py-3 font-semibold">Criticality</th>
+              <th className="px-4 py-3 font-semibold">Cache</th>
+              <th className="px-4 py-3 font-semibold">Decision</th>
+              <th className="px-4 py-3 font-semibold">Reason</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[#e5e9ef]">
+            {draft.nodes.map((item) => {
+              const decision = decisionsByName.get(item.name);
+              return (
+                <tr key={item.name}>
+                  <td className="px-4 py-3 font-medium">{item.name}</td>
+                  <td className="px-4 py-3">
+                    <SelectValue
+                      value={item.health}
+                      options={healthOptions}
+                      onChange={(value) => updateNode(item.name, { health: value })}
+                    />
+                  </td>
+                  <td className="px-4 py-3">
+                    <SelectValue
+                      value={item.criticality}
+                      options={criticalityOptions}
+                      onChange={(value) => updateNode(item.name, { criticality: value })}
+                    />
+                  </td>
+                  <td className="px-4 py-3">
+                    <SelectValue
+                      value={item.cachePolicy}
+                      options={cacheOptions}
+                      onChange={(value) => updateNode(item.name, { cachePolicy: value })}
+                    />
+                  </td>
+                  <td className="px-4 py-3">
+                    {decision ? <Badge value={decision.decision} /> : <span className="text-[#98a2b3]">pending</span>}
+                  </td>
+                  <td className="px-4 py-3 text-[#536173]">{decision?.reason || "not planned yet"}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function DefineDependenciesPanel({
+  inputMode,
+  setInputMode,
+  graphText,
+  setGraphText,
+  jsonText,
+  setJsonText,
+  generating,
+  generateGraph,
+  applyJSONDraft
+}: {
+  inputMode: DependencyInputMode;
+  setInputMode: (value: DependencyInputMode) => void;
+  graphText: string;
+  setGraphText: (value: string) => void;
+  jsonText: string;
+  setJsonText: (value: string) => void;
+  generating: boolean;
+  generateGraph: () => void;
+  applyJSONDraft: () => void;
+}) {
+  return (
+    <section className="mx-auto w-full max-w-6xl rounded-md border border-[#d8dde6] bg-white p-4 shadow-sm">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-base font-semibold">Define dependencies</h2>
+          <p className="mt-1 text-sm text-[#667085]">Start with natural language or paste graph JSON.</p>
+        </div>
+      </div>
+
+      <div className="mb-3 inline-flex rounded-md border border-[#c9d1dc] bg-[#f8fafc] p-1">
+        <ModeButton active={inputMode === "natural"} onClick={() => setInputMode("natural")}>
+          Natural language
+        </ModeButton>
+        <ModeButton active={inputMode === "json"} onClick={() => setInputMode("json")}>
+          JSON
+        </ModeButton>
+      </div>
+
+      {inputMode === "natural" ? (
+        <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
+          <div>
+            <textarea
+              className="min-h-[112px] w-full resize-y rounded-md border border-[#c9d1dc] bg-white p-3 text-sm text-[#344054] shadow-sm"
+              value={graphText}
+              onChange={(event) => setGraphText(event.target.value)}
+            />
+          </div>
+
+          <button
+            className="h-10 rounded-md border border-[#c9d1dc] bg-white px-4 text-sm font-medium text-[#344054] shadow-sm disabled:cursor-not-allowed disabled:bg-[#f0f3f7] disabled:text-[#98a2b3]"
+            disabled={generating}
+            onClick={generateGraph}
+          >
+            {generating ? "Generating" : "Generate graph"}
+          </button>
+        </div>
+      ) : (
+        <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
+          <div>
+          <textarea
+            className="min-h-[220px] w-full resize-y rounded-md border border-[#c9d1dc] bg-[#fbfcfe] p-3 font-mono text-xs text-[#344054] shadow-sm"
+            value={jsonText}
+            onChange={(event) => setJsonText(event.target.value)}
+          />
+          </div>
+          <button
+            className="h-10 rounded-md border border-[#c9d1dc] bg-white px-4 text-sm font-medium text-[#344054] shadow-sm"
+            onClick={applyJSONDraft}
+          >
+            Generate graph
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ModeButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: string }) {
+  return (
+    <button
+      className={`h-8 rounded px-3 text-sm font-medium ${active ? "bg-white text-[#111827] shadow-sm" : "text-[#667085]"}`}
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  );
+}
+
+function SegmentedControl({ value, setValue }: { value: WorkView; setValue: (value: WorkView) => void }) {
+  return (
+    <div className="inline-flex rounded-md border border-[#c9d1dc] bg-[#f8fafc] p-1">
+      <ModeButton active={value === "both"} onClick={() => setValue("both")}>
+        Both
+      </ModeButton>
+      <ModeButton active={value === "graph"} onClick={() => setValue("graph")}>
+        Graph
+      </ModeButton>
+      <ModeButton active={value === "decisions"} onClick={() => setValue("decisions")}>
+        Decisions
+      </ModeButton>
+    </div>
+  );
+}
+
+function PlanSummary({ plan }: { plan: PlanResponse | null }) {
+  return (
+    <section className="mx-auto w-full max-w-6xl rounded-md border border-[#d8dde6] bg-white p-4 shadow-sm">
+      <h2 className="text-base font-semibold">Plan summary</h2>
+      {plan ? (
+        <div className="mt-4 space-y-4">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <SummaryTile label="root" value={plan.root} />
+            <SummaryTile label="status" value={plan.status} tone={plan.status} />
+            <SummaryTile label="outcome" value={plan.outcome} tone={plan.outcome} />
+          </div>
+
+          <div className="rounded-md border border-[#d8dde6] bg-[#fafbfc] p-3 text-sm text-[#344054]">
+            {plan.reason}
+          </div>
+
+          <div className="grid grid-cols-5 gap-2">
+            {decisionOrder.map((decision) => (
+              <div key={decision} className="rounded-md border border-[#d8dde6] p-3 text-center">
+                <div className="text-lg font-semibold">{plan.decisionCounts[decision]}</div>
+                <div className="mt-1 text-[11px] font-medium text-[#667085]">{decision}</div>
+              </div>
+            ))}
+          </div>
+
+          <ImpactList impacts={plan.impacts} />
+        </div>
+      ) : (
+        <div className="mt-4 rounded-md border border-dashed border-[#c9d1dc] p-5 text-sm text-[#667085]">
+          Run a scenario to see the composed response plan.
+        </div>
+      )}
+    </section>
+  );
 }
 
 function ImpactList({ impacts }: { impacts: Impact[] }) {
@@ -321,51 +563,78 @@ function GraphView({
   const root = scenario.nodes.find((item) => item.name === scenario.root);
   const deps = scenario.nodes.filter((item) => item.name !== scenario.root);
   const rootDecision = root ? decisionsByName.get(root.name) : undefined;
+  const rowHeight = 112;
+  const nodeHeight = 88;
+  const graphWidth = 720;
+  const rootX = 24;
+  const rootWidth = 190;
+  const depX = 466;
+  const depWidth = 230;
+  const rootY = Math.max(136, deps.length * rowHeight / 2);
+  const graphHeight = Math.max(360, deps.length * rowHeight + 64);
 
   return (
-    <div className="relative min-h-[360px] overflow-hidden rounded-md border border-[#d8dde6] bg-[#f8fafc]">
-      <svg className="absolute inset-0 h-full w-full" viewBox="0 0 900 360" preserveAspectRatio="none" aria-hidden="true">
+    <div
+      className="overflow-x-auto rounded-md border border-[#d8dde6] bg-[#f8fafc]"
+    >
+      <div className="relative" style={{ width: graphWidth, height: graphHeight }}>
+        <svg className="absolute inset-0 h-full w-full" viewBox={`0 0 ${graphWidth} ${graphHeight}`} aria-hidden="true">
+          {deps.map((item, index) => {
+            const y = depY(index, rowHeight) + nodeHeight / 2;
+            const decision = decisionsByName.get(item.name)?.decision;
+            return (
+              <path
+                key={item.name}
+                d={`M ${rootX + rootWidth} ${rootY + nodeHeight / 2} C 300 ${rootY + nodeHeight / 2}, 330 ${y}, ${depX} ${y}`}
+                className={edgeStrokeClass(decision)}
+                fill="none"
+                strokeWidth="2"
+              />
+            );
+          })}
+        </svg>
+
+        {root && (
+          <div className="absolute" style={{ left: rootX, top: rootY, width: rootWidth }}>
+            <GraphNode item={root} decision={rootDecision} variant="root" />
+          </div>
+        )}
+
         {deps.map((item, index) => {
-          const y = graphY(index, deps.length);
-          const decision = decisionsByName.get(item.name)?.decision;
+          const top = depY(index, rowHeight);
           return (
-            <path
-              key={item.name}
-              d={`M 254 180 C 390 180, 420 ${y}, 560 ${y}`}
-              className={edgeClass(decision)}
-              fill="none"
-              strokeWidth="2"
-            />
+            <div key={item.name}>
+              <div className="absolute" style={{ left: 262, top: top + 22, width: 142 }}>
+                <EdgeLabel item={item} />
+              </div>
+              <div className="absolute" style={{ left: depX, top, width: depWidth }}>
+                <GraphNode item={item} decision={decisionsByName.get(item.name)} />
+              </div>
+            </div>
           );
         })}
-      </svg>
-
-      <div className="absolute left-[43%] top-6 flex h-[312px] w-[20%] flex-col justify-between">
-        {deps.map((item) => (
-          <EdgeLabel key={item.name} item={item} />
-        ))}
-      </div>
-
-      {root && (
-        <div className="absolute left-[5%] top-1/2 w-[28%] -translate-y-1/2">
-          <GraphNode item={root} decision={rootDecision} />
-        </div>
-      )}
-
-      <div className="absolute right-[5%] top-6 flex h-[312px] w-[34%] flex-col justify-between">
-        {deps.map((item) => (
-          <GraphNode key={item.name} item={item} decision={decisionsByName.get(item.name)} />
-        ))}
       </div>
     </div>
   );
 }
 
-function GraphNode({ item, decision }: { item: Node; decision?: NodeDecision }) {
+function GraphNode({
+  item,
+  decision,
+  variant = "dependency"
+}: {
+  item: Node;
+  decision?: NodeDecision;
+  variant?: "root" | "dependency";
+}) {
   return (
-    <div className={`min-h-[68px] rounded-md border bg-white p-3 shadow-sm ${nodeClass(decision?.decision)}`}>
+    <div
+      className={`relative z-10 w-full rounded-md border bg-white p-3 shadow-sm ${nodeClass(decision?.decision)} ${
+        variant === "root" ? "min-h-[96px]" : "min-h-[80px]"
+      }`}
+    >
       <div>
-        <div className="truncate text-sm font-semibold">{item.name}</div>
+        <div className="break-words text-sm font-semibold leading-5">{item.name}</div>
         <div className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
           <PolicyChip value={item.health} tone={healthTone(item.health)} />
           <PolicyChip value={item.criticality} tone={item.criticality === "REQUIRED" ? "critical" : "neutral"} />
@@ -379,13 +648,11 @@ function GraphNode({ item, decision }: { item: Node; decision?: NodeDecision }) 
 
 function EdgeLabel({ item }: { item: Node }) {
   return (
-    <div className="flex h-[68px] items-center justify-center">
-      <div className="rounded-md border border-[#d8dde6] bg-white/90 px-2 py-1 text-center shadow-sm">
-        <div className={`text-[10px] font-semibold ${item.criticality === "REQUIRED" ? "text-[#a31f1f]" : "text-[#475467]"}`}>
-          {item.criticality}
-        </div>
-        <div className="mt-0.5 text-[10px] font-medium text-[#667085]">{cacheLabel(item.cachePolicy)}</div>
+    <div className="rounded-md border border-[#d8dde6] bg-white px-2 py-1 text-center shadow-sm">
+      <div className={`text-[10px] font-semibold ${item.criticality === "REQUIRED" ? "text-[#a31f1f]" : "text-[#475467]"}`}>
+        {item.criticality}
       </div>
+      <div className="mt-0.5 text-[10px] font-medium text-[#667085]">{cacheLabel(item.cachePolicy)}</div>
     </div>
   );
 }
@@ -461,7 +728,7 @@ function nodeClass(value?: Decision) {
   return "border-[#d8dde6]";
 }
 
-function edgeClass(value?: Decision) {
+function edgeStrokeClass(value?: Decision) {
   if (value === "LIVE") return "stroke-[#2e8b57]";
   if (value === "CACHE") return "stroke-[#2f6fbd]";
   if (value === "STALE") return "stroke-[#c98712]";
@@ -470,9 +737,8 @@ function edgeClass(value?: Decision) {
   return "stroke-[#c4ccd8]";
 }
 
-function graphY(index: number, count: number) {
-  if (count <= 1) return 180;
-  return 60 + (240 / (count - 1)) * index;
+function depY(index: number, rowHeight: number) {
+  return 32 + index * rowHeight;
 }
 
 function healthTone(value: Health) {
